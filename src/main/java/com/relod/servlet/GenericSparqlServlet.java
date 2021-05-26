@@ -28,37 +28,43 @@ import jakarta.servlet.http.HttpServletResponse;
 public class GenericSparqlServlet extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 
-    /**
-     * Default constructor. 
-     */
-    public GenericSparqlServlet() {
-        // TODO Auto-generated constructor stub
-    }
+	/**
+	 * Default constructor.
+	 */
+	public GenericSparqlServlet() {
+		// TODO Auto-generated constructor stub
+	}
 
 	/**
-	 * @see HttpServlet#doGet(HttpServletRequest request, HttpServletResponse response)
+	 * @see HttpServlet#doGet(HttpServletRequest request, HttpServletResponse
+	 *      response)
 	 */
-	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		if(request.getParameter("dataset") != null) {
+	protected void doGet(HttpServletRequest request, HttpServletResponse response)
+			throws ServletException, IOException {
+		if (request.getParameter("dataset") != null) {
 			String endPoint = request.getParameter("dataset");
 			String query = request.getParameter("query");
-			//String strQuery = "SELECT * where {?s ?p ?o} limit 10" ;
-			SPARQLRepository repo = new SPARQLRepository(endPoint);
-			RepositoryConnection conn = repo.getConnection();
-			try {
-				TupleQuery tQuery = conn.prepareTupleQuery(QueryLanguage.SPARQL, query); 
-				TupleQueryResult rs = tQuery.evaluate();
-				response.getWriter().append("Results:\n");
-				while(rs.hasNext()) {
-					response.getWriter().append(rs.next().toString()).append("\n");
+			// String strQuery = "SELECT * where {?s ?p ?o} limit 10" ;
+//			if (endPoint.indexOf("sparql") > 0) {
+				SPARQLRepository repo = new SPARQLRepository(endPoint);
+				RepositoryConnection conn = repo.getConnection();
+				try {
+					TupleQuery tQuery = conn.prepareTupleQuery(QueryLanguage.SPARQL, query);
+					TupleQueryResult rs = tQuery.evaluate();
+					response.getWriter().append("Results:\n");
+					while (rs.hasNext()) {
+						response.getWriter().append(rs.next().toString()).append("\n");
+					}
+					// return Long.parseLong(rs.next().getValue("objs").stringValue());
+				} finally {
+					conn.close();
 				}
-				//return Long.parseLong(rs.next().getValue("objs").stringValue());
-			} finally {
-				conn.close();
-			}
+//			} else {
+//				response.getWriter().append(Util.execQueryRDFRes(query, endPoint, -1).toString());
+//			}
 			response.getWriter().append("\n\nDataset: ").append(request.getParameter("dataset"));
 			response.getWriter().append("\nQuery: ").append(request.getParameter("query"));
-		} else if(request.getParameter("datasets") != null) {
+		} else if (request.getParameter("datasets") != null) {
 			Set<String> ret = new LinkedHashSet<String>();
 			String datasets = request.getParameter("datasets");
 			String str[] = datasets.split(",");
@@ -70,24 +76,26 @@ public class GenericSparqlServlet extends HttpServlet {
 				try {
 					ret = generateDatasetSimilarity(props);
 					response.getWriter().append("Datasets: ").append(datasets).append("\n");
-					response.getWriter().append("Number of properties and classes they share: ").append("" + ret.size());
+					response.getWriter().append("Number of properties and classes they share: ")
+							.append("" + ret.size());
 					response.getWriter().append("\nMatches: ").append(ret.toString());
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
-			}	
+			}
 		}
 	}
 
 	/**
-	 * @see HttpServlet#doPost(HttpServletRequest request, HttpServletResponse response)
+	 * @see HttpServlet#doPost(HttpServletRequest request, HttpServletResponse
+	 *      response)
 	 */
-	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+	protected void doPost(HttpServletRequest request, HttpServletResponse response)
+			throws ServletException, IOException {
 		// TODO Auto-generated method stub
 		doGet(request, response);
 	}
 
-	
 	public static Set<String> generateDatasetSimilarity(Set<String> datasets) {
 		Set<String> ret = new HashSet<String>();
 		String[] array = datasets.stream().toArray(String[]::new);
@@ -106,7 +114,7 @@ public class GenericSparqlServlet extends HttpServlet {
 		}
 		return ret;
 	}
-	
+
 	private static Map<String, Set<String>> getExactMatches(String source, String target)
 			throws FileNotFoundException, UnsupportedEncodingException {
 		final Set<String> propsSource = new LinkedHashSet<String>();
@@ -147,7 +155,7 @@ public class GenericSparqlServlet extends HttpServlet {
 		// writer.close();
 		return mapExactMatch;
 	}
-	
+
 	private static Set<String> getProps(String source, String fName) {
 		// Put Claus approach here...
 		// instead of execute the SPARQL at the Dataset, we query the Dataset Catalog
@@ -170,9 +178,9 @@ public class GenericSparqlServlet extends HttpServlet {
 				SPARQLRepository repo = new SPARQLRepository(source);
 				RepositoryConnection conn = repo.getConnection();
 				try {
-					TupleQuery tQuery = conn.prepareTupleQuery(QueryLanguage.SPARQL, cSparql); 
+					TupleQuery tQuery = conn.prepareTupleQuery(QueryLanguage.SPARQL, cSparql);
 					TupleQueryResult rs = tQuery.evaluate();
-					while(rs.hasNext()) {
+					while (rs.hasNext()) {
 						ret.add(rs.next().toString());
 					}
 				} finally {
