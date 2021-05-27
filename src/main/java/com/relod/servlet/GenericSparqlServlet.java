@@ -3,7 +3,7 @@ package com.relod.servlet;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -14,6 +14,10 @@ import org.eclipse.rdf4j.query.TupleQuery;
 import org.eclipse.rdf4j.query.TupleQueryResult;
 import org.eclipse.rdf4j.repository.RepositoryConnection;
 import org.eclipse.rdf4j.repository.sparql.SPARQLRepository;
+
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -65,20 +69,33 @@ public class GenericSparqlServlet extends HttpServlet {
 			response.getWriter().append("\n\nDataset: ").append(request.getParameter("dataset"));
 			response.getWriter().append("\nQuery: ").append(request.getParameter("query"));
 		} else if (request.getParameter("datasets") != null) {
-			Set<String> ret = new LinkedHashSet<String>();
+			Map<String, Set<String>> ret = null;
 			String datasets = request.getParameter("datasets");
 			String str[] = datasets.split(",");
 			if (str.length > 1) {
-				Set<String> props = new LinkedHashSet<String>();
+				Set<String> setDs = new LinkedHashSet<String>();
 				for (String p : str) {
-					props.add(p.trim());
+					setDs.add(p.trim());
 				}
 				try {
-					ret = generateDatasetSimilarity(props);
-					response.getWriter().append("Datasets: ").append(datasets).append("\n");
-					response.getWriter().append("Number of properties and classes they share: ")
-							.append("" + ret.size());
-					response.getWriter().append("\nMatches: ").append(ret.toString());
+					
+					ret = generateDatasetSimilarity(setDs);
+					Gson gson = new Gson();
+			        Type gsonType = new TypeToken<HashMap>(){}.getType();
+			        String gsonString = gson.toJson(ret,gsonType);
+			        response.getWriter().append(gsonString);
+//			        int nProps = 0;
+//					for (Map.Entry<String, Set<String>> entry : ret.entrySet()) {
+//						response.getWriter().append("\nDataset pair: " + entry.getKey());
+//						nProps += entry.getValue().size();
+//						response.getWriter().append("\nProperty/classes in common: " + entry.getValue().toString().replaceAll("p=", ""));
+//						response.getWriter().append("\n\nDatasets: ").append(datasets).append("\n");
+//						response.getWriter().append("\nNumber of properties and classes they share: ")
+//								.append("" + nProps);
+//						//System.out.println(entry.getKey() + ":" + entry.getValue());
+//				    }
+					
+					
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
@@ -96,23 +113,22 @@ public class GenericSparqlServlet extends HttpServlet {
 		doGet(request, response);
 	}
 
-	public static Set<String> generateDatasetSimilarity(Set<String> datasets) {
-		Set<String> ret = new HashSet<String>();
+	public static Map<String, Set<String>> generateDatasetSimilarity(Set<String> datasets) {
+		Map<String, Set<String>> mapExactMatch = null;
 		String[] array = datasets.stream().toArray(String[]::new);
 		for (int i = 0; i < array.length; i++) {
 			for (int j = i; j < array.length; j++) {
 				try {
 					if (array[i].equalsIgnoreCase(array[j]))
 						continue;
-					Map<String, Set<String>> exactMatches = getExactMatches(array[i], array[j]);
-					ret.add(exactMatches.toString());
+					mapExactMatch = getExactMatches(array[i], array[j]);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
 			}
 
 		}
-		return ret;
+		return mapExactMatch;
 	}
 
 	private static Map<String, Set<String>> getExactMatches(String source, String target)
