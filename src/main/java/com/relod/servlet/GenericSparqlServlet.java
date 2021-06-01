@@ -4,6 +4,10 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Type;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -20,19 +24,12 @@ import org.eclipse.rdf4j.repository.sparql.SPARQLRepository;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import java.lang.reflect.Type;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import web.servlet.matching.Util;
-import web.servlet.matching.WIMUDataset;
 
 /**
  * Servlet implementation class SimilarityServlet
@@ -118,7 +115,6 @@ public class GenericSparqlServlet extends HttpServlet {
 	 */
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
-		// TODO Auto-generated method stub
 		doGet(request, response);
 	}
 
@@ -192,7 +188,7 @@ public class GenericSparqlServlet extends HttpServlet {
 
 		propsSource.parallelStream().forEach(pSource -> {
 			propsTarget.parallelStream().forEach(pTarget -> {
-				if (pSource.equalsIgnoreCase(pTarget)) {
+				if (pSource.trim().equalsIgnoreCase(pTarget.trim())) {
 					propsMatched.add(pSource);
 				}
 			});
@@ -227,7 +223,7 @@ public class GenericSparqlServlet extends HttpServlet {
 					TupleQuery tQuery = conn.prepareTupleQuery(QueryLanguage.SPARQL, cSparql);
 					TupleQueryResult rs = tQuery.evaluate();
 					while (rs.hasNext()) {
-						ret.add(rs.next().toString().replaceAll("p=", "").replace("[", "").replace("]", ""));
+						ret.add(rs.next().toString().trim().replaceAll("p=", "").replace("[", "").replace("]", ""));
 					}
 				} finally {
 					conn.close();
@@ -239,10 +235,10 @@ public class GenericSparqlServlet extends HttpServlet {
 				Type mapType = new TypeToken<Map<String, Set<String>>>(){}.getType();  
 				Map<String, Set<String>> son = new Gson().fromJson(sJson, mapType);
 				for (Map.Entry<String, Set<String>> entry : son.entrySet()) {
-//					for(String s: entry.getValue()) {
-//						ret.add("[" + s + "]");
-//					}
-					ret.addAll(entry.getValue());
+					for(String s: entry.getValue()) {
+						ret.add(s.trim());
+					}
+					//ret.addAll(entry.getValue());
 				}
 			}
 		} catch (Exception e) {
@@ -256,8 +252,14 @@ public class GenericSparqlServlet extends HttpServlet {
 
 		String nURI = URLEncoder.encode(cSparql, "UTF-8");
 
+		URL urlRelod = getFinalURL(new URL("http://w3id.org/relod/"));
 		URL urlSearch = new URL(
-				"http://141.57.11.86:8082/DatasetMatchingWeb/sparqlservlet?dataset=" + source + "&query=" + nURI);
+				urlRelod.toString() + "sparqlservlet?dataset=" + source + "&query=" + nURI);
+		//URL urlSearch = new URL(
+		//		"http://141.57.11.86:8082/DatasetMatchingWeb/sparqlservlet?dataset=" + source + "&query=" + nURI);
+		//URL urlSearch = new URL(
+		//		"http://w3id.org/relod/sparqlservlet?dataset=" + source + "&query=" + nURI);
+		
 		InputStreamReader reader = null;
 		try {
 			reader = new InputStreamReader(urlSearch.openStream());
@@ -267,5 +269,30 @@ public class GenericSparqlServlet extends HttpServlet {
 		}
 		sJson = IOUtils.toString(reader);
 		return sJson;
+	}
+	
+	public static URL getFinalURL(URL url) {
+	    try {
+	        HttpURLConnection con = (HttpURLConnection) url.openConnection();
+	        con.setInstanceFollowRedirects(false);
+	        con.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36");
+	        con.addRequestProperty("Accept-Language", "en-US,en;q=0.8");
+	        con.addRequestProperty("Referer", "https://www.google.com/");
+	        con.connect();
+	        //con.getInputStream();
+	        int resCode = con.getResponseCode();
+	        if (resCode == HttpURLConnection.HTTP_SEE_OTHER
+	                || resCode == HttpURLConnection.HTTP_MOVED_PERM
+	                || resCode == HttpURLConnection.HTTP_MOVED_TEMP) {
+	            String Location = con.getHeaderField("Location");
+	            if (Location.startsWith("/")) {
+	                Location = url.getProtocol() + "://" + url.getHost() + Location;
+	            }
+	            return getFinalURL(new URL(Location));
+	        }
+	    } catch (Exception e) {
+	        System.out.println(e.getMessage());
+	    }
+	    return url;
 	}
 }
