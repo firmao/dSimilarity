@@ -97,7 +97,7 @@ public class GenericSparqlServlet extends HttpServlet {
 			}
 		} else if ((request.getParameter("opt") != null) && (request.getParameter("opt").equals("dsim"))) {
 			Map<String, Map<String, String>> ret = null;
-			String datasets = request.getParameter("dsim");
+			String datasets = request.getParameter("datasets");
 			String str[] = datasets.split(",");
 			if (str.length > 1) {
 				Set<String> setDs = new LinkedHashSet<String>();
