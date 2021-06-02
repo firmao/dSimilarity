@@ -7,7 +7,8 @@
 <title>Insert title here</title>
 </head>
 <body>
-<h1>Generic Sparql Query EndPoint</h1>
+<h1>Generic Sparql Query RDF Dataset</h1>
+<h4>SPARQL endpoint, HDT file, RDF dump file, Ontology, etc...All you need is the URL of your datasets</h4>
 <form action="SimilarityServlet">
   <label for="fname">Dataset:</label>
   <input type="text" id="dataset" name="dataset" value="https://dbpedia.org/sparql"><br><br>

@@ -2,6 +2,7 @@ package com.relod.servlet;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
 import java.net.URL;
 
 import org.eclipse.rdf4j.RDF4JException;
@@ -20,6 +21,10 @@ import org.eclipse.rdf4j.rio.helpers.StatementCollector;
 public class Testrdf4j {
 
 	public static void main(String[] args) throws IOException {
+		System.out.println(GenericSparqlServlet.getFinalURL(new URL("https://rest.matportal.org/ontologies/EMMO/submissions/1/download?apikey\\u003d66c82e77-ce0d-4385-8056-a95898e47ebb")));
+	}
+
+	public static void test1() throws IOException {
 		java.net.URL documentUrl = new URL("http://141.57.11.86:8082/dirHDTLaundromat/decompressed/76/7682278f9dd608f09c4c073a915e58a1/7682278f9dd608f09c4c073a915e58a1.hdt");
 		//URL documentUrl = new URL("https://www.w3.org/2001/sw/DataAccess/df1/tests/rdf-schema.ttl");
 		InputStream inputStream = documentUrl.openStream();
@@ -56,5 +61,4 @@ public class Testrdf4j {
 		}
 		
 	}
-
 }

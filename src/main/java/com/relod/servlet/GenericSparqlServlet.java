@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.text.similarity.JaccardSimilarity;
 import org.eclipse.rdf4j.query.QueryLanguage;
 import org.eclipse.rdf4j.query.TupleQuery;
 import org.eclipse.rdf4j.query.TupleQueryResult;
@@ -74,7 +75,7 @@ public class GenericSparqlServlet extends HttpServlet {
 			Type gsonType = new TypeToken<HashMap>(){}.getType();
 	        String gsonString = gson.toJson(ret,gsonType);
 	        response.getWriter().append(gsonString);
-		} else if (request.getParameter("datasets") != null) {
+		} else if ((request.getParameter("opt") != null) && (request.getParameter("opt").equals("exact"))) {
 			Map<String, Set<String>> ret = null;
 			String datasets = request.getParameter("datasets");
 			String str[] = datasets.split(",");
@@ -84,24 +85,32 @@ public class GenericSparqlServlet extends HttpServlet {
 					setDs.add(p.trim());
 				}
 				try {
-
 					ret = generateDatasetSimilarity(setDs);
 					Gson gson = new Gson();
 					Type gsonType = new TypeToken<HashMap>() {
 					}.getType();
 					String gsonString = gson.toJson(ret, gsonType);
 					response.getWriter().append(gsonString);
-//			        int nProps = 0;
-//					for (Map.Entry<String, Set<String>> entry : ret.entrySet()) {
-//						response.getWriter().append("\nDataset pair: " + entry.getKey());
-//						nProps += entry.getValue().size();
-//						response.getWriter().append("\nProperty/classes in common: " + entry.getValue().toString().replaceAll("p=", ""));
-//						response.getWriter().append("\n\nDatasets: ").append(datasets).append("\n");
-//						response.getWriter().append("\nNumber of properties and classes they share: ")
-//								.append("" + nProps);
-//						//System.out.println(entry.getKey() + ":" + entry.getValue());
-//				    }
-
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		} else if ((request.getParameter("opt") != null) && (request.getParameter("opt").equals("dsim"))) {
+			Map<String, Map<String, String>> ret = null;
+			String datasets = request.getParameter("dsim");
+			String str[] = datasets.split(",");
+			if (str.length > 1) {
+				Set<String> setDs = new LinkedHashSet<String>();
+				for (String p : str) {
+					setDs.add(p.trim());
+				}
+				try {
+					ret = generateDatasetSimilarity(setDs,true);
+					Gson gson = new Gson();
+					Type gsonType = new TypeToken<HashMap>() {
+					}.getType();
+					String gsonString = gson.toJson(ret, gsonType);
+					response.getWriter().append(gsonString);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
@@ -139,6 +148,28 @@ public class GenericSparqlServlet extends HttpServlet {
 		return mapExactMatch;
 	}
 
+	public static Map<String, Map<String, String>> generateDatasetSimilarity(Set<String> datasets, boolean bSimilar) {
+		Map<String, Set<String>> mapExactMatch = new LinkedHashMap<String, Set<String>>();
+		Map<String, Map<String, String>> mapSim = new LinkedHashMap<String, Map<String, String>>();
+		String[] array = datasets.stream().toArray(String[]::new);
+		for (int i = 0; i < array.length; i++) {
+			for (int j = i; j < array.length; j++) {
+				try {
+					if (array[i].equalsIgnoreCase(array[j]))
+						continue;
+					mapExactMatch.putAll(getExactMatches(array[i], array[j]));
+					if(bSimilar) {
+						mapSim.putAll(getSimMatches(array[i], array[j], 0.8, mapExactMatch));
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+
+		}
+		return mapSim;
+	}
+	
 	private static Map<String, Set<String>> getOnlyMatchProps(Set<String> datasets,
 			Map<String, Set<String>> mapExactMatch) {
 		Map<String, Set<String>> ret = new LinkedHashMap<String, Set<String>>();
@@ -197,7 +228,81 @@ public class GenericSparqlServlet extends HttpServlet {
 		// writer.close();
 		return mapExactMatch;
 	}
+	
+	private static Map<String, Map<String, String>> getSimMatches(String source, String target, double threshold,
+			Map<String, Set<String>> mapExactMatch) throws FileNotFoundException, UnsupportedEncodingException {
+		final Set<String> propsSource = new LinkedHashSet<String>();
+		final Set<String> propsTarget = new LinkedHashSet<String>();
+		final Map<String, String> propsMatched = new LinkedHashMap<String, String>();
+		final Map<String, Map<String, String>> mapSim = new LinkedHashMap<String, Map<String, String>>();
 
+		String s[] = source.split("/");
+		String fSource = null;
+		String fTarget = null;
+		if (s.length > 2) {
+			fSource = s[2] + "_" + s[s.length - 1];
+		} else {
+			fSource = s[s.length - 1];
+		}
+		String t[] = target.split("/");
+		if (t.length > 2) {
+			fTarget = t[2] + "_" + t[t.length - 1];
+		} else {
+			fTarget = t[t.length - 1];
+		}
+		// final String fileName = OUTPUT_DIR + "/" + fSource + "---" + fTarget +
+		// "_Sim.tsv";
+		final String fileName = fSource + "---" + fTarget + "_Sim.tsv";
+		propsSource.addAll(getProps(source, fSource));
+		propsTarget.addAll(getProps(target, fTarget));
+
+		for (Set<String> done : mapExactMatch.values()) {
+			propsSource.removeAll(done);
+			propsTarget.removeAll(done);
+		}
+
+		if ((propsSource.size() < 1) || (propsTarget.size() < 1)) {
+			return mapSim;
+		}
+
+		// PrintWriter writer = new PrintWriter(fileName, "UTF-8");
+		JaccardSimilarity sim = new JaccardSimilarity();
+		propsSource.parallelStream().forEach(pSource -> {
+		//for(String pSource : propsSource) {
+			propsTarget.parallelStream().forEach(pTarget -> {
+			//for(String pTarget : propsTarget) {
+				String p1 = getURLName(pSource);
+				String p2 = getURLName(pTarget);
+				double dSim = sim.apply(p1, p2);
+				if (dSim >= threshold) {
+					propsMatched.put(pSource, pTarget);
+				}
+			});
+			//}	
+		});
+		//}
+		mapSim.put(fileName, propsMatched);
+		// writer.close();
+		return mapSim;
+	}
+
+	public static String getURLName(String property) {
+		String name = null;
+		try {
+			if (property.indexOf("#") > 0) {
+				String[] str = property.split("#");
+				name = str[str.length - 1];
+				return name.replaceAll("\"", "");
+			} else {
+				String[] str = property.split("/");
+				name = str[str.length - 1];
+			}
+		} catch (Exception e) {
+			System.err.println("Problem with URI: " + property);
+		}
+		return name.replaceAll("\"", "");
+	}
+	
 	private static Set<String> getProps(String source, String fName) {
 		// Put Claus approach here...
 		// instead of execute the SPARQL at the Dataset, we query the Dataset Catalog

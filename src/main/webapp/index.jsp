@@ -9,10 +9,18 @@
 <body>
 	<h1>Which properties and classes the RDF datasets have in common?</h1>
 	<h4>SPARQL endpoint, HDT file, RDF dump file, Ontology, etc...All you need is the URL of your datasets</h4>
+	
 	<form action="SimilarityServlet">
-		<label for="fname">Datasets</label>
-		<textarea id="datasets" name="datasets" rows="4" cols="80">http://pt.dbpedia.org/sparql, https://dbpedia.org/sparql</textarea>
-		<br> <br> <input type="submit" value="Submit">
+		<fieldset style="border: none">
+			<label for="fname">Datasets</label>
+			<textarea id="datasets" name="datasets" rows="4" cols="80">http://pt.dbpedia.org/sparql, https://dbpedia.org/sparql</textarea>
+			<br/>
+			<input type="radio" id="exact" name="opt" value="exact"/> Exact Matches
+			<br/>
+			<input type="radio" id="dsim" name="opt" value="dsim"/> Similar Matches
+			<br/>
+			<br> <br> <input type="submit" value="Submit">
+		</fieldset>
 	</form>
 	<br>
 	<h3>Or</h3>
