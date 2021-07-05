@@ -18,7 +18,9 @@
 			<input type="radio" id="exact" name="opt" value="exact"/> Exact Matches
 			<br/>
 			<input type="radio" id="dsim" name="opt" value="dsim"/> Similar Matches
+			<input type="text" id="simlevel" name="simlevel" value="0.9" /> Similarity level (0.0-1.0)
 			<br/>
+			<input type="checkbox" id="rdf" name="rdf" value="rdf"/> Results in RDF
 			<br> <br> <input type="submit" value="Submit">
 		</fieldset>
 	</form>

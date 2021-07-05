@@ -52,29 +52,19 @@ public class GenericSparqlServlet extends HttpServlet {
 	 */
 	protected void doGet(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
+		boolean bRdf = (request.getParameter("rdf") != null);
 		if (request.getParameter("dataset") != null) {
-			Map<String, Set<String>> ret = new HashMap<String, Set<String>> ();
+			Map<String, Set<String>> ret = new HashMap<String, Set<String>>();
 			String endPoint = request.getParameter("dataset");
 			String query = request.getParameter("query");
-//			SPARQLRepository repo = new SPARQLRepository(endPoint);
-//			RepositoryConnection conn = repo.getConnection();
-//			try {
-//				TupleQuery tQuery = conn.prepareTupleQuery(QueryLanguage.SPARQL, query);
-//				TupleQueryResult rs = tQuery.evaluate();
-//				//response.getWriter().append("Results:\n");
-//				Set<String> setRet = new LinkedHashSet<String>();
-//				while (rs.hasNext()) {
-//					setRet.add(rs.next().toString());
-//				}
-//				ret.put(endPoint, setRet);
-//			} finally {
-//				conn.close();
-//			}
 			ret.put(endPoint, execSparql(query, endPoint));
-			Gson gson = new Gson();
-			Type gsonType = new TypeToken<HashMap>(){}.getType();
-	        String gsonString = gson.toJson(ret,gsonType);
-	        response.getWriter().append(gsonString);
+			String outStr = null;
+			if (bRdf) {
+				outStr = convRDF((HashMap) ret, 1.0);
+			} else {
+				outStr = convJSON((HashMap) ret);
+			}
+			response.getWriter().append(outStr);
 		} else if ((request.getParameter("opt") != null) && (request.getParameter("opt").equals("exact"))) {
 			Map<String, Set<String>> ret = null;
 			String datasets = request.getParameter("datasets");
@@ -86,11 +76,13 @@ public class GenericSparqlServlet extends HttpServlet {
 				}
 				try {
 					ret = generateDatasetSimilarity(setDs);
-					Gson gson = new Gson();
-					Type gsonType = new TypeToken<HashMap>() {
-					}.getType();
-					String gsonString = gson.toJson(ret, gsonType);
-					response.getWriter().append(gsonString);
+					String outStr = null;
+					if (bRdf) {
+						outStr = convRDF((HashMap) ret, 1.0);
+					} else {
+						outStr = convJSON((HashMap) ret);
+					}
+					response.getWriter().append(outStr);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
@@ -98,6 +90,7 @@ public class GenericSparqlServlet extends HttpServlet {
 		} else if ((request.getParameter("opt") != null) && (request.getParameter("opt").equals("dsim"))) {
 			Map<String, Map<String, String>> ret = null;
 			String datasets = request.getParameter("datasets");
+			double simLevel = Double.parseDouble(request.getParameter("simlevel"));
 			String str[] = datasets.split(",");
 			if (str.length > 1) {
 				Set<String> setDs = new LinkedHashSet<String>();
@@ -105,17 +98,54 @@ public class GenericSparqlServlet extends HttpServlet {
 					setDs.add(p.trim());
 				}
 				try {
-					ret = generateDatasetSimilarity(setDs,true);
-					Gson gson = new Gson();
-					Type gsonType = new TypeToken<HashMap>() {
-					}.getType();
-					String gsonString = gson.toJson(ret, gsonType);
-					response.getWriter().append(gsonString);
+					ret = generateDatasetSimilarity(setDs, true, simLevel);
+					String outStr = null;
+					if (bRdf) {
+						outStr = convRDF((HashMap) ret, simLevel);
+					} else {
+						outStr = convJSON((HashMap) ret);
+					}
+					response.getWriter().append(outStr);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
 			}
 		}
+	}
+
+	private String convRDF(HashMap map, double simLevel) {
+		String rdfOut = "";
+		if(map.toString().contains("---")) { //similar
+			Map<String, Map<String, String>> ret = map;
+			for (Map.Entry<String, Map<String, String>> entry : ret.entrySet()) {
+				String graph = "<http://relod.org/DatasetPair#" + entry.getKey() + ">";
+				for (Map.Entry<String, String> trip : entry.getValue().entrySet()) {
+					String triple = "<" + trip.getKey() + "> <http://relod.org/similar#"+ simLevel+ "> <" + trip.getValue() + ">";
+					triple += " " + graph + " .\n";
+					rdfOut += triple;
+				}
+			}
+			return rdfOut;
+		}  
+		// exact
+		Map<String, Set<String>> ret = map;
+		for (Map.Entry<String, Set<String>> entry : ret.entrySet()) {
+			String d[] = entry.getKey().split(",");
+			String dSource = d[0].trim().replace("[", "");
+			String dTarget = d[1].trim().replace("]", "");
+			for (String propClass : entry.getValue()) {
+				String triple = "<" + dSource + "> <"+ propClass + "> <" + dTarget + "> .\n";
+				rdfOut += triple;
+			}
+		}
+		return rdfOut;
+	}
+
+	private String convJSON(HashMap ret) {
+		Gson gson = new Gson();
+		Type gsonType = new TypeToken<HashMap>() {
+		}.getType();
+		return gson.toJson(ret, gsonType);
 	}
 
 	/**
@@ -142,13 +172,14 @@ public class GenericSparqlServlet extends HttpServlet {
 			}
 
 		}
-		if(datasets.size() > 1) {
+		if (datasets.size() > 1) {
 			return getOnlyMatchProps(datasets, mapExactMatch);
 		}
 		return mapExactMatch;
 	}
 
-	public static Map<String, Map<String, String>> generateDatasetSimilarity(Set<String> datasets, boolean bSimilar) {
+	public static Map<String, Map<String, String>> generateDatasetSimilarity(Set<String> datasets, boolean bSimilar,
+			double simLevel) {
 		Map<String, Set<String>> mapExactMatch = new LinkedHashMap<String, Set<String>>();
 		Map<String, Map<String, String>> mapSim = new LinkedHashMap<String, Map<String, String>>();
 		String[] array = datasets.stream().toArray(String[]::new);
@@ -158,8 +189,8 @@ public class GenericSparqlServlet extends HttpServlet {
 					if (array[i].equalsIgnoreCase(array[j]))
 						continue;
 					mapExactMatch.putAll(getExactMatches(array[i], array[j]));
-					if(bSimilar) {
-						mapSim.putAll(getSimMatches(array[i], array[j], 0.8, mapExactMatch));
+					if (bSimilar) {
+						mapSim.putAll(getSimMatches(array[i], array[j], simLevel, mapExactMatch));
 					}
 				} catch (Exception e) {
 					e.printStackTrace();
@@ -169,7 +200,7 @@ public class GenericSparqlServlet extends HttpServlet {
 		}
 		return mapSim;
 	}
-	
+
 	private static Map<String, Set<String>> getOnlyMatchProps(Set<String> datasets,
 			Map<String, Set<String>> mapExactMatch) {
 		Map<String, Set<String>> ret = new LinkedHashMap<String, Set<String>>();
@@ -228,7 +259,7 @@ public class GenericSparqlServlet extends HttpServlet {
 		// writer.close();
 		return mapExactMatch;
 	}
-	
+
 	private static Map<String, Map<String, String>> getSimMatches(String source, String target, double threshold,
 			Map<String, Set<String>> mapExactMatch) throws FileNotFoundException, UnsupportedEncodingException {
 		final Set<String> propsSource = new LinkedHashSet<String>();
@@ -268,9 +299,9 @@ public class GenericSparqlServlet extends HttpServlet {
 		// PrintWriter writer = new PrintWriter(fileName, "UTF-8");
 		JaccardSimilarity sim = new JaccardSimilarity();
 		propsSource.parallelStream().forEach(pSource -> {
-		//for(String pSource : propsSource) {
+			// for(String pSource : propsSource) {
 			propsTarget.parallelStream().forEach(pTarget -> {
-			//for(String pTarget : propsTarget) {
+				// for(String pTarget : propsTarget) {
 				String p1 = getURLName(pSource);
 				String p2 = getURLName(pTarget);
 				double dSim = sim.apply(p1, p2);
@@ -278,10 +309,10 @@ public class GenericSparqlServlet extends HttpServlet {
 					propsMatched.put(pSource, pTarget);
 				}
 			});
-			//}	
+			// }
 		});
-		//}
-		mapSim.put(fileName, propsMatched);
+		// }
+		mapSim.put(fileName.replaceAll(".tsv", ""), propsMatched);
 		// writer.close();
 		return mapSim;
 	}
@@ -302,7 +333,7 @@ public class GenericSparqlServlet extends HttpServlet {
 		}
 		return name.replaceAll("\"", "");
 	}
-	
+
 	private static Set<String> getProps(String source, String fName) {
 		// Put Claus approach here...
 		// instead of execute the SPARQL at the Dataset, we query the Dataset Catalog
@@ -337,13 +368,14 @@ public class GenericSparqlServlet extends HttpServlet {
 				// ret.addAll(Util.execQueryRDFRes(cSparql, source, -1));
 				String sJson = execSparqlFile(cSparql, source);
 				sJson = sJson.replaceAll("=p", "");
-				Type mapType = new TypeToken<Map<String, Set<String>>>(){}.getType();  
+				Type mapType = new TypeToken<Map<String, Set<String>>>() {
+				}.getType();
 				Map<String, Set<String>> son = new Gson().fromJson(sJson, mapType);
 				for (Map.Entry<String, Set<String>> entry : son.entrySet()) {
-					for(String s: entry.getValue()) {
+					for (String s : entry.getValue()) {
 						ret.add(s.trim());
 					}
-					//ret.addAll(entry.getValue());
+					// ret.addAll(entry.getValue());
 				}
 			}
 		} catch (Exception e) {
@@ -358,13 +390,13 @@ public class GenericSparqlServlet extends HttpServlet {
 		String nURI = URLEncoder.encode(cSparql, "UTF-8");
 
 		URL urlRelod = getFinalURL(new URL("http://w3id.org/relod/"));
-		URL urlSearch = new URL(
-				urlRelod.toString() + "sparqlservlet?dataset=" + source + "&query=" + nURI);
-		//URL urlSearch = new URL(
-		//		"http://141.57.11.86:8082/DatasetMatchingWeb/sparqlservlet?dataset=" + source + "&query=" + nURI);
-		//URL urlSearch = new URL(
-		//		"http://w3id.org/relod/sparqlservlet?dataset=" + source + "&query=" + nURI);
-		
+		URL urlSearch = new URL(urlRelod.toString() + "sparqlservlet?dataset=" + source + "&query=" + nURI);
+		// URL urlSearch = new URL(
+		// "http://141.57.11.86:8082/DatasetMatchingWeb/sparqlservlet?dataset=" + source
+		// + "&query=" + nURI);
+		// URL urlSearch = new URL(
+		// "http://w3id.org/relod/sparqlservlet?dataset=" + source + "&query=" + nURI);
+
 		InputStreamReader reader = null;
 		try {
 			reader = new InputStreamReader(urlSearch.openStream());
@@ -375,29 +407,29 @@ public class GenericSparqlServlet extends HttpServlet {
 		sJson = IOUtils.toString(reader);
 		return sJson;
 	}
-	
+
 	public static URL getFinalURL(URL url) {
-	    try {
-	        HttpURLConnection con = (HttpURLConnection) url.openConnection();
-	        con.setInstanceFollowRedirects(false);
-	        con.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36");
-	        con.addRequestProperty("Accept-Language", "en-US,en;q=0.8");
-	        con.addRequestProperty("Referer", "https://www.google.com/");
-	        con.connect();
-	        //con.getInputStream();
-	        int resCode = con.getResponseCode();
-	        if (resCode == HttpURLConnection.HTTP_SEE_OTHER
-	                || resCode == HttpURLConnection.HTTP_MOVED_PERM
-	                || resCode == HttpURLConnection.HTTP_MOVED_TEMP) {
-	            String Location = con.getHeaderField("Location");
-	            if (Location.startsWith("/")) {
-	                Location = url.getProtocol() + "://" + url.getHost() + Location;
-	            }
-	            return getFinalURL(new URL(Location));
-	        }
-	    } catch (Exception e) {
-	        System.out.println(e.getMessage());
-	    }
-	    return url;
+		try {
+			HttpURLConnection con = (HttpURLConnection) url.openConnection();
+			con.setInstanceFollowRedirects(false);
+			con.setRequestProperty("User-Agent",
+					"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36");
+			con.addRequestProperty("Accept-Language", "en-US,en;q=0.8");
+			con.addRequestProperty("Referer", "https://www.google.com/");
+			con.connect();
+			// con.getInputStream();
+			int resCode = con.getResponseCode();
+			if (resCode == HttpURLConnection.HTTP_SEE_OTHER || resCode == HttpURLConnection.HTTP_MOVED_PERM
+					|| resCode == HttpURLConnection.HTTP_MOVED_TEMP) {
+				String Location = con.getHeaderField("Location");
+				if (Location.startsWith("/")) {
+					Location = url.getProtocol() + "://" + url.getHost() + Location;
+				}
+				return getFinalURL(new URL(Location));
+			}
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+		}
+		return url;
 	}
 }
