@@ -6,6 +6,9 @@ import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.HashMap;
@@ -17,6 +20,8 @@ import java.util.Set;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.text.similarity.JaccardSimilarity;
+import org.eclipse.rdf4j.model.IRI;
+import org.eclipse.rdf4j.model.util.Values;
 import org.eclipse.rdf4j.query.QueryLanguage;
 import org.eclipse.rdf4j.query.TupleQuery;
 import org.eclipse.rdf4j.query.TupleQueryResult;
@@ -113,14 +118,32 @@ public class GenericSparqlServlet extends HttpServlet {
 		}
 	}
 
+	private static IRI makeValidIRI(String iri) {
+		URI uri = null;
+		try {
+	      URL url = new URL(iri);
+	      String nullFragment = null;
+	      uri = new URI(url.getProtocol(), url.getHost(), url.getPath(), url.getQuery(), nullFragment);
+	      System.out.println("URI " + uri.toString() + " is OK");
+	    } catch (MalformedURLException e) {
+	      System.out.println("URL " + iri + " is a malformed URL");
+	    } catch (URISyntaxException e) {
+	      System.out.println("URI " + iri + " is a malformed URL");
+	    }
+		return Values.iri(uri.toString());
+	}
+	
 	private String convRDF(HashMap map, double simLevel) {
 		String rdfOut = "";
 		if(map.toString().contains("---")) { //similar
 			Map<String, Map<String, String>> ret = map;
 			for (Map.Entry<String, Map<String, String>> entry : ret.entrySet()) {
-				String graph = "<http://relod.org/DatasetPair#" + entry.getKey() + ">";
+				String graph = "<" + makeValidIRI("http://relod.org/DatasetPair#" + entry.getKey()) + ">";
 				for (Map.Entry<String, String> trip : entry.getValue().entrySet()) {
-					String triple = "<" + trip.getKey() + "> <http://relod.org/similar#"+ simLevel+ "> <" + trip.getValue() + ">";
+					if(trip.getKey().toString().contains("CittÃ")) {
+						System.out.println("PARAAAAA !!!!");
+					}
+					String triple = "<" + makeValidIRI(trip.getKey()) + "> <http://relod.org/similar#"+ simLevel+ "> <" + makeValidIRI(trip.getValue()) + ">";
 					triple += " " + graph + " .\n";
 					rdfOut += triple;
 				}
