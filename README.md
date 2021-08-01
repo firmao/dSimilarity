@@ -1,6 +1,7 @@
 # dSimilarity
-Dataset Similarity
+RDF Dataset Similarity
 
+-Prototype available here:
 http://141.57.11.86:8083/dSimilarity
 
 
